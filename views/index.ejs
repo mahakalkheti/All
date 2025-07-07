@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance Management System</title>
+<link rel="stylesheet" href="/style.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            width: 90%;
+            max-width: 1200px;
+            margin: auto;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+        select, input[type="date"], button {
+            padding: 10px;
+            margin-top: 5px;
+        }
+        .stats, .attendance-section, .reports-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+        }
+        .stat-card, .report-card {
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .student-list {
+            display: flex;
+            flex-direction: column;
+        }
+        .student-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+        .attendance-controls {
+            display: flex;
+            align-items: center;
+        }
+        .attendance-checkbox {
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📚 Attendance Management System</h1>
+            <p>Complete attendance tracking for all classes</p>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="classSelect">Select Class:</label>
+                <select id="classSelect">
+                    <option value="">-- Select Class --</option>
+                    <option value="Nursery">Nursery</option>
+                    <option value="LKG">LKG</option>
+                    <option value="UKG">UKG</option>
+                    <option value="1st">1st Grade</option>
+                    <option value="2nd">2nd Grade</option>
+                    <option value="3rd">3rd Grade</option>
+                    <option value="4th">4th Grade</option>
+                    <option value="5th">5th Grade</option>
+                    <option value="6th">6th Grade</option>
+                    <option value="7th">7th Grade</option>
+                    <option value="8th">8th Grade</option>
+                    <option value="9th">9th Grade</option>
+                    <option value="10th">10th Grade</option>
+                    <option value="11th">11th Grade</option>
+                    <option value="12th">12th Grade</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label for="dateInput">Date:</label>
+                <input type="date" id="dateInput" />
+            </div>
+            
+            <button onclick="saveAttendance()">Save Attendance</button>
+            <button onclick="generateReports()">Generate Reports</button>
+        </div>
+
+        <div id="statsSection" class="stats" style="display: none;">
+            <div class="stat-card">
+                <h3 id="totalStudents">0</h3>
+                <p>Total Students</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="presentStudents">0</h3>
+                <p>Present Today</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="absentStudents">0</h3>
+                <p>Absent Today</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="attendancePercentage">0%</h3>
+                <p>Attendance Rate</p>
+            </div>
+        </div>
+
+        <div id="attendanceSection" class="attendance-section" style="display: none;">
+            <h2 class="section-title" id="sectionTitle">Class Students</h2>
+            <div id="studentsList" class="student-list">
+            </div>
+        </div>
+
+        <div id="reportsSection" class="reports-section" style="display: none;">
+            <div class="report-card">
+                <h3 class="section-title">📊 Monthly Report</h3>
+                <div id="monthlyReport"></div>
+            </div>
+            <div class="report-card">
+                <h3 class="section-title">📅 Yearly Report</h3>
+                <div id="yearlyReport"></div>
+            </div>
+        </div>
+
+        <div id="loadingSpinner" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    </div>
+
+   <script>
+    let attendanceData = {};
+    let currentDate = new Date().toISOString().split('T')[0];
+
+    document.getElementById('dateInput').value = currentDate;
+
+    document.getElementById('classSelect').addEventListener('change', function () {
+        const selectedClass = this.value;
+        if (selectedClass) {
+            loadStudents(selectedClass);
+            loadStats(selectedClass);
+        } else {
+            hideAttendanceSection();
+        }
+    });
+
+    document.getElementById('dateInput').addEventListener('change', function () {
+        currentDate = this.value;
+        const selectedClass = document.getElementById('classSelect').value;
+        if (selectedClass) {
+            loadStudents(selectedClass);
+            loadStats(selectedClass);
+        }
+    });
+
+    function showLoading() {
+        document.getElementById('loadingSpinner').style.display = 'flex';
+    }
+
+    function hideLoading() {
+        document.getElementById('loadingSpinner').style.display = 'none';
+    }
+
+    function loadStudents(className) {
+        showLoading();
+
+        fetch(`/students/${className}?date=${currentDate}`)
+            .then(res => res.json())
+            .then(data => {
+                const students = data.students;
+                students.forEach(student => {
+                    const key = `${className}_${student.roll}_${currentDate}`;
+                    attendanceData[key] = student.isPresent;
+                });
+                displayStudents(className, students);
+                hideLoading();
+            })
+            .catch(err => {
+                console.error('Error:', err);
+                hideLoading();
+            });
+    }
+
+    function loadStats(className) {
+        fetch(`/stats/${className}?date=${currentDate}`)
+            .then(res => res.json())
+            .then(stats => {
+                updateStatsDisplay(stats);
+            })
+            .catch(err => console.error('Error:', err));
+    }
+
+    function displayStudents(className, students) {
+        const studentsList = document.getElementById('studentsList');
+        const sectionTitle = document.getElementById('sectionTitle');
+        sectionTitle.textContent = `Class ${className} - Students`;
+
+        if (!students || students.length === 0) {
+            studentsList.innerHTML = '<div class="no-students">No students found for this class</div>';
+            document.getElementById('attendanceSection').style.display = 'block';
+            document.getElementById('statsSection').style.display = 'none';
+            return;
+        }
+
+        studentsList.innerHTML = '';
+        students.forEach(student => {
+            const studentItem = document.createElement('div');
+            studentItem.className = 'student-item';
+
+            studentItem.innerHTML = `
+                <div class="student-info">
+                    <div class="student-name">${student.name}</div>
+                    <div class="student-roll">${student.roll}</div>
+                </div>
+                <div class="attendance-controls">
+                    <div class="checkbox-container">
+                        <input type="checkbox"
+                            class="attendance-checkbox"
+                            id="${student.roll}"
+                            ${student.isPresent ? 'checked' : ''}
+                            onchange="updateAttendanceStatus('${student.roll}', this.checked)">
+                    </div>
+                    <div class="attendance-status ${student.isPresent ? 'present' : 'absent'}"
+                        id="status_${student.roll}">
+                        ${student.isPresent ? 'Present' : 'Absent'}
+                    </div>
+                </div>
+            `;
+            studentsList.appendChild(studentItem);
+        });
+
+        document.getElementById('attendanceSection').style.display = 'block';
+        document.getElementById('statsSection').style.display = 'grid';
+    }
+
+    function updateStatsDisplay(stats) {
+        document.getElementById('totalStudents').textContent = stats.totalStudents;
+        document.getElementById('presentStudents').textContent = stats.presentStudents;
+        document.getElementById('absentStudents').textContent = stats.absentStudents;
+        document.getElementById('attendancePercentage').textContent = stats.attendancePercentage + '%';
+    }
+
+    function hideAttendanceSection() {
+        document.getElementById('attendanceSection').style.display = 'none';
+        document.getElementById('statsSection').style.display = 'none';
+        document.getElementById('reportsSection').style.display = 'none';
+    }
+
+    function updateAttendanceStatus(rollNo, isPresent) {
+        const selectedClass = document.getElementById('classSelect').value;
+        const attendanceKey = `${selectedClass}_${rollNo}_${currentDate}`;
+        attendanceData[attendanceKey] = isPresent;
+
+        const statusElement = document.getElementById(`status_${rollNo}`);
+        statusElement.textContent = isPresent ? 'Present' : 'Absent';
+        statusElement.className = `attendance-status ${isPresent ? 'present' : 'absent'}`;
+
+        loadStats(selectedClass);
+    }
+
+    function saveAttendance() {
+        const selectedClass = document.getElementById('classSelect').value;
+        if (!selectedClass) {
+            alert('कृपया पहले कोई क्लास सेलेक्ट करें!');
+            return;
+        }
+
+        const classAttendance = {};
+        Object.keys(attendanceData).forEach(key => {
+            const [className, roll, date] = key.split('_');
+            if (className === selectedClass && date === currentDate) {
+                classAttendance[roll] = attendanceData[key];
+            }
+        });
+
+        showLoading();
+
+        fetch(`/attendance/${selectedClass}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                date: currentDate,
+                attendance: classAttendance
+            })
+        })
+            .then(res => res.json())
+            .then(data => {
+                alert(`✅ Class ${selectedClass} की attendance ${currentDate} के लिए save हो गई!`);
+                hideLoading();
+            })
+            .catch(err => {
+                console.error('Error:', err);
+                hideLoading();
+            });
+    }
+    function updateStatsImmediately(className) {
+    const studentCheckboxes = document.querySelectorAll('.attendance-checkbox');
+    let presentCount = 0;
+
+    studentCheckboxes.forEach(checkbox => {
+        if (checkbox.checked) {
+            presentCount++;
+        }
+    });
+
+    const totalCount = studentCheckboxes.length;
+    const absentCount = totalCount - presentCount;
+    const attendancePercentage = totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0;
+
+    updateStatsDisplay({
+        totalStudents: totalCount,
+        presentStudents: presentCount,
+        absentStudents: absentCount,
+        attendancePercentage
+    });
+}
+
+function updateAttendanceStatus(rollNo, isPresent) {
+    const selectedClass = document.getElementById('classSelect').value;
+    const attendanceKey = `${selectedClass}_${rollNo}_${currentDate}`;
+    attendanceData[attendanceKey] = isPresent;
+
+    const statusElement = document.getElementById(`status_${rollNo}`);
+    statusElement.textContent = isPresent ? 'Present' : 'Absent';
+    statusElement.className = `attendance-status ${isPresent ? 'present' : 'absent'}`;
+
+    // ✅ Update stats immediately (without waiting for save)
+    updateStatsImmediately(selectedClass);
+}
+
+
+function generateReports() {
+    const selectedClass = document.getElementById('classSelect').value;
+    if (!selectedClass) {
+        alert('कृपया पहले कोई क्लास सेलेक्ट करें!');
+        return;
+    }
+
+    showLoading();
+
+    Promise.all([
+        fetch(`/reports/${selectedClass}?type=monthly&date=${currentDate}`).then(res => res.json()),
+        fetch(`/reports/${selectedClass}?type=yearly&date=${currentDate}`).then(res => res.json())
+    ])
+        .then(([monthlyData, yearlyData]) => {
+            displayReport('monthlyReport', monthlyData.reports);
+            displayReport('yearlyReport', yearlyData.reports);
+            document.getElementById('reportsSection').style.display = 'grid';
+            hideLoading();
+        })
+        .catch(err => {
+            console.error('Error fetching reports:', err);
+            hideLoading();
+        });
+}
+
+function displayReport(containerId, reportData) {
+    const reportDiv = document.getElementById(containerId);
+    reportDiv.innerHTML = '';
+
+    if (!reportData || reportData.length === 0) {
+        reportDiv.innerHTML = '<div class="no-report">कोई डेटा नहीं मिला</div>';
+        return;
+    }
+
+    reportData.forEach(student => {
+        const reportItem = document.createElement('div');
+        reportItem.className = 'report-item';
+
+        reportItem.innerHTML = `
+            <div class="report-name">${student.name} (${student.roll})</div>
+            <div class="report-percentage ${student.attendanceClass}">${student.percentage}%</div>
+        `;
+        reportDiv.appendChild(reportItem);
+    });
+}
+
+
+</script>
+
+</body>
+</html>
